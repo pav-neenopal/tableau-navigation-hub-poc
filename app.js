@@ -8,7 +8,8 @@ function norm(v){ return String(v ?? '').trim(); }
 function safeText(v){ return norm(v); }
 function fieldIndex(columns, expected){
   const target = expected.toLowerCase().replace(/[^a-z0-9]/g,'');
-  return columns.findIndex(c => norm(c.fieldName || c.caption || c.name).toLowerCase().replace(/[^a-z0-9]/g,'') === target);
+  const clean=x=>norm(x).toLowerCase().replace(/[^a-z0-9]/g,'');
+  return columns.findIndex(c => [c.fieldName,c.caption,c.name].some(x => clean(x)===target || clean(x).replace(/^(attrsumminmaxagg)/,'')===target));
 }
 function tableRows(table){
   const cols = table.columns || [];
@@ -62,9 +63,12 @@ async function loadWorksheetData(name){
   const ws=dash.worksheets.find(w=>w.name===name);
   if(!ws) throw new Error('Worksheet not found: '+name);
   $('dataState').textContent='Reading '+name+'…';
-  const reader=await ws.getSummaryDataReaderAsync({maxRows:5000});
-  try{const data=await reader.getAllPagesAsync();state.rows=tableRows(data);state.worksheetName=name;render();$('dataState').textContent=`${state.rows.length} dashboards • ${name}`;}
-  finally{await reader.releaseAsync();}
+  let data;
+  if(ws.getSummaryDataReaderAsync){
+    const reader=await ws.getSummaryDataReaderAsync(undefined,{ignoreSelection:true});
+    try{data=await reader.getAllPagesAsync();}finally{await reader.releaseAsync();}
+  } else { data=await ws.getSummaryDataAsync({ignoreSelection:true,maxRows:0}); }
+  state.rows=tableRows(data);state.worksheetName=name;render();$('dataState').textContent=`${state.rows.length} dashboards • ${name}`;
 }
 async function loadWorksheetList(){
   const select=$('worksheetSelect'); select.innerHTML='';
