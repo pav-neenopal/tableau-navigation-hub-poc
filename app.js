@@ -6,6 +6,7 @@ const FIELDS = ['Dashboard Tab Name','Dashboard Category','Dashboard Name','Dash
 
 function T(p,ms,l){return Promise.race([p,new Promise((_,rej)=>setTimeout(()=>rej(new Error('timed out ('+l+')')),ms))]);}
 function norm(v){ return String(v ?? '').trim(); }
+function safeLink(u){u=norm(u);return /^https?:\/\//i.test(u)?u:'#';}
 function safeText(v){ return norm(v); }
 function fieldIndex(columns, expected){
   const target = expected.toLowerCase().replace(/[^a-z0-9]/g,'');
