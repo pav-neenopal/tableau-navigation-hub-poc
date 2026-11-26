@@ -56,24 +56,22 @@ function cardHtml(r){
   const status=r.Status;
   return `<article class="dashboard-card"><a class="preview" href="${escapeHtml(link)}" target="_blank" rel="noopener noreferrer" aria-label="Open ${escapeHtml(title)}">${img?`<img src="${img}" alt="${escapeHtml(title)} preview" />`:`<span class="image-empty"><span class="plus">＋</span><span>Add dashboard image</span></span>`}</a><div class="card-body"><div class="card-title">${escapeHtml(title)}</div><div class="card-bottom"><span class="status ${statusClass(status)}">${escapeHtml(status)}</span><a class="open-link" href="${escapeHtml(link)}" target="_blank" rel="noopener noreferrer">Open dashboard ↗</a></div></div><div class="card-actions"><button data-image="${escapeHtml(link)}">${img?'Replace image':'Add image'}</button>${img?`<button data-remove-image="${escapeHtml(link)}">Remove</button>`:''}</div></article>`;
 }
-function showConfig(){ $('configPanel').hidden=false; }
+function showConfig(){ $('configPanel').hidden=false; if(window.tableau?.extensions?.dashboardContent) loadWorksheetList(); }
 function setMessage(s){$('configMessage').textContent=s;}
 async function loadWorksheetData(name){
   const dash=tableau.extensions.dashboardContent.dashboard;
   const ws=dash.worksheets.find(w=>w.name===name);
   if(!ws) throw new Error('Worksheet not found: '+name);
   $('dataState').textContent='Reading '+name+'…';
-  let data;
-  if(ws.getSummaryDataReaderAsync){
-    const reader=await ws.getSummaryDataReaderAsync(undefined,{ignoreSelection:true});
-    try{data=await reader.getAllPagesAsync();}finally{await reader.releaseAsync();}
-  } else { data=await ws.getSummaryDataAsync({ignoreSelection:true,maxRows:0}); }
+  const data=await ws.getSummaryDataAsync({ignoreSelection:true});
   state.rows=tableRows(data);state.worksheetName=name;render();$('dataState').textContent=`${state.rows.length} dashboards • ${name}`;
 }
 async function loadWorksheetList(){
   const select=$('worksheetSelect'); select.innerHTML='';
   const ws=tableau.extensions.dashboardContent.dashboard.worksheets;
   ws.forEach(w=>{const o=document.createElement('option');o.value=w.name;o.textContent=w.name;select.appendChild(o);});
+  if(!ws.length) setMessage('No worksheets found on this dashboard. Drag your directory worksheet onto the dashboard (it can be floating and tiny), then click Configure again.');
+  else setMessage('');
   if(state.worksheetName) select.value=state.worksheetName;
 }
 async function initTableau(){
