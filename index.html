@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Tableau Navigation Hub POC</title>
+  <link rel="stylesheet" href="styles.css" />
+  <!-- Tableau Extensions API. For production, pin to a tested version and host according to your org's policy. -->
+  <script src="tableau.extensions.1.latest.js"></script>
+</head>
+<body>
+  <header class="app-header">
+    <div><div class="eyebrow">TABLEAU • DATA APP POC</div><h1>Navigation Hub</h1></div>
+    <div class="toolbar">
+      <button id="configureBtn" class="secondary" hidden>Configure</button>
+      <button id="refreshBtn" class="secondary">Refresh data</button>
+    </div>
+  </header>
+
+  <section id="configPanel" class="config-panel" hidden>
+    <div class="config-head"><h2>Configure Hub</h2><button id="closeConfig" class="icon-btn" aria-label="Close configuration">×</button></div>
+    <p class="help">Select the worksheet containing your dashboard directory. The worksheet must expose the directory fields as a text table.</p>
+    <label for="worksheetSelect">Directory worksheet</label>
+    <div class="config-row"><select id="worksheetSelect"></select><button id="saveWorksheetBtn">Use worksheet</button></div>
+    <div id="configMessage" class="message" role="status"></div>
+    <p class="help small">Dashboard images are added here by the workbook author and saved in workbook extension settings. For this POC, images are resized and stored as compact data URLs. Use a hosted image service for production-scale libraries.</p>
+  </section>
+
+  <nav id="sectorTabs" class="sector-tabs" aria-label="Dashboard sectors"></nav>
+  <div class="status-filter" role="group" aria-label="Filter by status">
+    <button class="filter-chip active" data-status="All">All statuses</button>
+    <button class="filter-chip" data-status="Live">Live</button>
+    <button class="filter-chip" data-status="Development">Development</button>
+    <button class="filter-chip" data-status="Review">Review</button>
+  </div>
+  <main id="dashboardContent"><div class="loading">Connect a Tableau worksheet to load dashboard records.</div></main>
+  <footer><span>Navigation Hub POC</span><span id="dataState">Waiting for Tableau…</span></footer>
+  <input id="imagePicker" type="file" accept="image/png,image/jpeg,image/webp" hidden />
+  <script src="app.js"></script>
+</body>
+</html>
