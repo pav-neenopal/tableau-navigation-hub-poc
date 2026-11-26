@@ -63,7 +63,14 @@ async function loadWorksheetData(name){
   const ws=dash.worksheets.find(w=>w.name===name);
   if(!ws) throw new Error('Worksheet not found: '+name);
   $('dataState').textContent='Reading '+name+'…';
-  const data=await ws.getSummaryDataAsync({ignoreSelection:true});
+  const T=(p,ms,l)=>Promise.race([p,new Promise((_,rej)=>setTimeout(()=>rej(new Error('Timed out: '+l)),ms))]);
+  let data,errs=[];
+  try{ $('dataState').textContent='[build 5] Reading '+name+' (method 1)…'; data=await T(ws.getSummaryDataAsync({ignoreSelection:true}),8000,'getSummaryDataAsync'); }
+  catch(e1){ errs.push(e1.message); console.error(e1);
+    try{ $('dataState').textContent='[build 5] method 2…'; const rd=await T(ws.getSummaryDataReaderAsync(100,{ignoreSelection:true}),8000,'getSummaryDataReaderAsync'); data=await T(rd.getAllPagesAsync(),8000,'getAllPagesAsync'); try{rd.releaseAsync();}catch(_){} }
+    catch(e2){ errs.push(e2.message); console.error(e2);
+      try{ $('dataState').textContent='[build 5] method 3…'; const tbls=await T(ws.getUnderlyingTablesAsync(),8000,'getUnderlyingTablesAsync'); data=await T(ws.getUnderlyingTableDataAsync(tbls[0].id,{maxRows:1000}),8000,'getUnderlyingTableDataAsync'); }
+      catch(e3){ errs.push(e3.message); throw new Error('All read methods failed: '+errs.join(' | ')); } } }
   state.rows=tableRows(data);state.worksheetName=name;render();$('dataState').textContent=`${state.rows.length} dashboards • ${name}`;
 }
 async function loadWorksheetList(){
