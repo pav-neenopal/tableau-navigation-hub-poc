@@ -4,6 +4,7 @@ const $ = (id) => document.getElementById(id);
 const state = { rows: [], sectors: [], activeSector: '', status: 'All', worksheetName: '', images: {}, pendingImageLink: '' };
 const FIELDS = ['Dashboard Tab Name','Dashboard Category','Dashboard Name','Dashboard Link','Status'];
 
+function T(p,ms,l){return Promise.race([p,new Promise((_,rej)=>setTimeout(()=>rej(new Error('timed out ('+l+')')),ms))]);}
 function norm(v){ return String(v ?? '').trim(); }
 function safeText(v){ return norm(v); }
 function fieldIndex(columns, expected){
@@ -63,14 +64,19 @@ async function loadWorksheetData(name){
   const ws=dash.worksheets.find(w=>w.name===name);
   if(!ws) throw new Error('Worksheet not found: '+name);
   $('dataState').textContent='Reading '+name+'…';
-  const T=(p,ms,l)=>Promise.race([p,new Promise((_,rej)=>setTimeout(()=>rej(new Error('Timed out: '+l)),ms))]);
-  let data,errs=[];
-  try{ $('dataState').textContent='[build 5] Reading '+name+' (method 1)…'; data=await T(ws.getSummaryDataAsync({ignoreSelection:true}),8000,'getSummaryDataAsync'); }
-  catch(e1){ errs.push(e1.message); console.error(e1);
-    try{ $('dataState').textContent='[build 5] method 2…'; const rd=await T(ws.getSummaryDataReaderAsync(100,{ignoreSelection:true}),8000,'getSummaryDataReaderAsync'); data=await T(rd.getAllPagesAsync(),8000,'getAllPagesAsync'); try{rd.releaseAsync();}catch(_){} }
-    catch(e2){ errs.push(e2.message); console.error(e2);
-      try{ $('dataState').textContent='[build 5] method 3…'; const tbls=await T(ws.getUnderlyingTablesAsync(),8000,'getUnderlyingTablesAsync'); data=await T(ws.getUnderlyingTableDataAsync(tbls[0].id,{maxRows:1000}),8000,'getUnderlyingTableDataAsync'); }
-      catch(e3){ errs.push(e3.message); throw new Error('All read methods failed: '+errs.join(' | ')); } } }
+  let data; const errs=[]; const t0=Date.now();
+  const tick=setInterval(()=>{ if($('dataState').textContent.startsWith('[build 6]')) $('dataState').textContent=$('dataState').textContent.replace(/ \(\d+s\)$/,'')+' ('+Math.round((Date.now()-t0)/1000)+'s)'; },1000);
+  const methods=[
+    ['summary data', async()=>T(ws.getSummaryDataAsync({ignoreSelection:true}),8000,'summary')],
+    ['data source logical table', async()=>{const ds=(await T(ws.getDataSourcesAsync(),8000,'getDataSources'))[0];const lts=await T(ds.getLogicalTablesAsync(),8000,'getLogicalTables');return T(ds.getLogicalTableDataAsync(lts[0].id,{maxRows:1000}),8000,'logicalTableData');}],
+    ['underlying table', async()=>{const tb=await T(ws.getUnderlyingTablesAsync(),8000,'getUnderlyingTables');return T(ws.getUnderlyingTableDataAsync(tb[0].id,{maxRows:1000}),8000,'underlyingData');}]
+  ];
+  for(const [label,fn] of methods){
+    try{ $('dataState').textContent='[build 6] Reading '+name+' via '+label+'…'; data=await fn(); if(data&&data.data){ break; } }
+    catch(e){ errs.push(label+': '+e.message); console.error(label,e); }
+  }
+  clearInterval(tick);
+  if(!data) throw new Error('All read methods failed: '+errs.join(' | '));
   state.rows=tableRows(data);state.worksheetName=name;render();$('dataState').textContent=`${state.rows.length} dashboards • ${name}`;
 }
 async function loadWorksheetList(){
@@ -120,3 +126,28 @@ $('refreshBtn').addEventListener('click',async()=>{try{await loadWorksheetList()
 document.querySelectorAll('.filter-chip').forEach(b=>b.addEventListener('click',()=>{state.status=b.dataset.status;document.querySelectorAll('.filter-chip').forEach(x=>x.classList.toggle('active',x===b));render();}));
 $('imagePicker').addEventListener('change',async e=>{const file=e.target.files?.[0];if(!file||!state.pendingImageLink)return;if(file.size>12*1024*1024){alert('Choose an image smaller than 12 MB.');return;}try{state.images[state.pendingImageLink]=await compressImage(file);await saveImages();render();}catch(err){alert('Image could not be saved. Try a smaller JPG or PNG. '+err.message);}});
 initTableau();
+
+(function(){
+  const pre=document.createElement('pre');pre.id='diag';pre.style.cssText='font-size:11px;white-space:pre-wrap;background:#f5f5f5;padding:8px;margin-top:8px;max-height:260px;overflow:auto';
+  const btn=document.createElement('button');btn.textContent='Run diagnostics';btn.className='secondary';btn.style.marginTop='8px';
+  $('configPanel').appendChild(btn);$('configPanel').appendChild(pre);
+  const log=s=>{pre.textContent+=s+'\n';};
+  btn.addEventListener('click',async()=>{
+    pre.textContent='';const t0=Date.now();const el=()=>'['+Math.round((Date.now()-t0)/1000)+'s] ';
+    try{
+      const ext=tableau.extensions;log(el()+'mode='+ext.environment.mode+' tableau='+ext.environment.tableauVersion+' apiVersion='+ext.environment.apiVersion+' context='+ext.environment.context);
+      const dash=ext.dashboardContent.dashboard;log(el()+'worksheets: '+dash.worksheets.map(w=>w.name).join(', '));
+      const ws=dash.worksheets.find(w=>w.name===$('worksheetSelect').value)||dash.worksheets[0];log(el()+'using '+ws.name);
+      const steps=[
+        ['getDataSourcesAsync',async()=>{const d=await T(ws.getDataSourcesAsync(),8000,'x');window._ds=d;return d.map(x=>x.name).join(', ');}],
+        ['getLogicalTablesAsync',async()=>{const l=await T(window._ds[0].getLogicalTablesAsync(),8000,'x');window._lt=l;return l.map(x=>x.caption+'#'+x.id).join(', ');}],
+        ['getLogicalTableDataAsync',async()=>{const d=await T(window._ds[0].getLogicalTableDataAsync(window._lt[0].id,{maxRows:5}),8000,'x');return 'cols='+d.columns.map(c=>c.fieldName).join('|')+' rows='+d.data.length;}],
+        ['getSummaryDataAsync',async()=>{const d=await T(ws.getSummaryDataAsync({ignoreSelection:true}),8000,'x');return 'cols='+d.columns.map(c=>c.fieldName).join('|')+' rows='+d.data.length;}],
+        ['getUnderlyingTablesAsync',async()=>{const t=await T(ws.getUnderlyingTablesAsync(),8000,'x');window._ut=t;return t.map(x=>x.caption+'#'+x.id).join(', ');}],
+        ['getUnderlyingTableDataAsync',async()=>{const d=await T(ws.getUnderlyingTableDataAsync(window._ut[0].id,{maxRows:5}),8000,'x');return 'cols='+d.columns.map(c=>c.fieldName).join('|')+' rows='+d.data.length;}]
+      ];
+      for(const [n,f] of steps){try{log(el()+n+' ... ');log('   OK: '+await f());}catch(e){log('   FAIL: '+e.message);}}
+      log(el()+'done');
+    }catch(e){log('ERROR: '+e.message);}
+  });
+})();
