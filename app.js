@@ -4,7 +4,9 @@ const $ = (id) => document.getElementById(id);
 const state = { rows: [], sectors: [], activeSector: '', status: 'All', worksheetName: '', images: {}, pendingImageLink: '' };
 let isAuthoring=false;
 document.body.classList.add('viewer');
-const DEFAULT_THEME={title:{text:'Navigation Hub',color:'',font:'',size:26},headerBg:'',pageBg:''};
+const DEFAULT_THEME={title:{text:'Navigation Hub',color:'',font:'',size:26},tabs:{},headings:{},headerBg:'',pageBg:''};
+state.cardStyles={};
+function styleStr(s){s=s||{};const p=[];if(s.color)p.push('color:'+s.color);if(s.font)p.push('font-family:'+s.font);if(s.size)p.push('font-size:'+s.size+'px');return escapeHtml(p.join(';'));}
 state.theme=JSON.parse(JSON.stringify(DEFAULT_THEME));
 function applyTheme(){
   const t=state.theme,el=$('appTitle');
@@ -23,19 +25,30 @@ async function openDialog(payload){
   if(!isAuthoring) return null;
   try{
     const url=new URL('dialog.html',location.href).href;
-    const opts={width:360,height:payload.kind==='text'?460:260};
+    const opts={width:380,height:Math.min(720,payload.groups.reduce((s,g)=>s+(g.colorOnly?95:(g.allowText?265:225)),150))};
     if(tableau.DialogStyle) opts.dialogStyle=tableau.DialogStyle.Modal;
     const res=await tableau.extensions.ui.displayDialogAsync(url,JSON.stringify(payload),opts);
     return res?JSON.parse(res):null;
   }catch(e){ console.warn('Dialog closed or failed:',e); if(e&&e.errorCode&&e.errorCode!=='dialog-closed-by-user') $('dataState').textContent='Dialog error: '+e.message; return null; }
 }
+async function persist(){try{await saveTheme();}catch(e){alert('Could not save: '+e.message);}}
 async function editTitle(){
-  const r=await openDialog({kind:'text',allowText:true,heading:'Edit title',values:state.theme.title});
-  if(r){state.theme.title=Object.assign({},state.theme.title,r);applyTheme();try{await saveTheme();}catch(e){alert('Could not save: '+e.message);}}
+  const r=await openDialog({heading:'Edit title',groups:[{key:'title',label:'Title',allowText:true,values:state.theme.title}]});
+  if(r){state.theme.title=Object.assign({},state.theme.title,r.title);applyTheme();persist();}
 }
 async function editColor(key,heading,fallback){
-  const r=await openDialog({kind:'color',heading,values:{color:state.theme[key]||fallback}});
-  if(r){state.theme[key]=r.color;applyTheme();try{await saveTheme();}catch(e){alert('Could not save: '+e.message);}}
+  const r=await openDialog({heading,groups:[{key:'c',label:heading,colorOnly:true,fallback,values:{color:state.theme[key]}}]});
+  if(r){state.theme[key]=r.c.color;applyTheme();persist();}
+}
+async function editTextStyle(key,heading){
+  const r=await openDialog({heading,groups:[{key:'t',label:heading,values:state.theme[key]}]});
+  if(r){state.theme[key]=r.t;render();persist();}
+}
+async function editCard(link){
+  const cs=state.cardStyles[link]||{};
+  const r=await openDialog({heading:'Format card',groups:[{key:'name',label:'Card name',values:cs.name},{key:'status',label:'Status text',values:cs.status},{key:'bg',label:'Card background',colorOnly:true,fallback:'#ffffff',values:{color:cs.bg}}]});
+  if(r){state.cardStyles[link]={name:r.name,status:r.status,bg:r.bg.color};render();
+    try{if(!isAuthoring)throw new Error('Editing is only available in authoring mode.');tableau.extensions.settings.set('hub.cards',JSON.stringify(state.cardStyles));await tableau.extensions.settings.saveAsync();}catch(e){alert('Could not save: '+e.message);}}
 }
 const FIELDS = ['Dashboard Tab Name','Dashboard Category','Dashboard Name','Dashboard Link','Status'];
 
@@ -78,20 +91,23 @@ function render(){
   const sectors = [...new Set(state.rows.map(r=>r['Dashboard Tab Name']).filter(Boolean))];
   state.sectors = sectors;
   if(!sectors.includes(state.activeSector)) state.activeSector = sectors[0] || '';
-  $('sectorTabs').innerHTML = sectors.map(s=>`<button class="sector-tab ${s===state.activeSector?'active':''}" data-sector="${escapeHtml(s)}">${escapeHtml(s)}</button>`).join('');
+  $('sectorTabs').innerHTML = sectors.map(s=>`<button class="sector-tab ${s===state.activeSector?'active':''}" data-sector="${escapeHtml(s)}" style="${styleStr(state.theme.tabs)}">${escapeHtml(s)}</button>`).join('')+'<button class="edit-btn author-only" data-edit-tabs title="Edit tab text">✎</button>';
   $('sectorTabs').querySelectorAll('[data-sector]').forEach(b=>b.addEventListener('click',()=>{state.activeSector=b.dataset.sector;render();}));
+  const et=$('sectorTabs').querySelector('[data-edit-tabs]');if(et)et.addEventListener('click',()=>editTextStyle('tabs','Tab text'));
   let rows=state.rows.filter(r=>r['Dashboard Tab Name']===state.activeSector);
   if(state.status!=='All') rows=rows.filter(r=>r.Status===state.status);
   const cats=groupBy(rows,'Dashboard Category');
   if(!rows.length){$('dashboardContent').innerHTML='<div class="empty-state">No dashboards match this selection.</div>';return;}
-  $('dashboardContent').innerHTML=Object.entries(cats).map(([cat,items])=>`<section><div class="category-heading">${escapeHtml(cat)}</div><div class="card-grid">${items.map(cardHtml).join('')}</div></section>`).join('');
+  $('dashboardContent').innerHTML=Object.entries(cats).map(([cat,items])=>`<section><div class="category-heading" style="${styleStr(state.theme.headings)}">${escapeHtml(cat)} <button class="edit-btn author-only" data-edit-headings title="Edit heading text">✎</button></div><div class="card-grid">${items.map(cardHtml).join('')}</div></section>`).join('');
+  $('dashboardContent').querySelectorAll('[data-edit-headings]').forEach(b=>b.addEventListener('click',()=>editTextStyle('headings','Category heading text')));
+  $('dashboardContent').querySelectorAll('[data-format]').forEach(b=>b.addEventListener('click',()=>editCard(b.dataset.format)));
   $('dashboardContent').querySelectorAll('[data-image]').forEach(b=>b.addEventListener('click',()=>chooseImage(b.dataset.image)));
   $('dashboardContent').querySelectorAll('[data-remove-image]').forEach(b=>b.addEventListener('click',()=>removeImage(b.dataset.removeImage)));
 }
 function cardHtml(r){
-  const link=safeLink(r['Dashboard Link']); const img=imageFor(r); const title=r['Dashboard Name'];
+  const cs=state.cardStyles[r['Dashboard Link']]||{};const link=safeLink(r['Dashboard Link']); const img=imageFor(r); const title=r['Dashboard Name'];
   const status=r.Status;
-  return `<article class="dashboard-card"><a class="preview" href="${escapeHtml(link)}" target="_blank" rel="noopener noreferrer" aria-label="Open ${escapeHtml(title)}">${img?`<img src="${img}" alt="${escapeHtml(title)} preview" />`:`<span class="image-empty">${isAuthoring?'<span class="plus">＋</span><span>Add dashboard image</span>':'<span>No preview</span>'}</span>`}</a><div class="card-body"><div class="card-title">${escapeHtml(title)}</div><div class="card-bottom"><span class="status ${statusClass(status)}">${escapeHtml(status)}</span><a class="open-link" href="${escapeHtml(link)}" target="_blank" rel="noopener noreferrer">Open dashboard ↗</a></div></div>${isAuthoring?`<div class="card-actions"><button data-image="${escapeHtml(link)}">${img?'Replace image':'Add image'}</button>${img?`<button data-remove-image="${escapeHtml(link)}">Remove</button>`:''}</div>`:''}</article>`;
+  return `<article class="dashboard-card" style="${cs.bg?'background:'+escapeHtml(cs.bg):''}"><a class="preview" href="${escapeHtml(link)}" target="_blank" rel="noopener noreferrer" aria-label="Open ${escapeHtml(title)}">${img?`<img src="${img}" alt="${escapeHtml(title)} preview" />`:`<span class="image-empty">${isAuthoring?'<span class="plus">＋</span><span>Add dashboard image</span>':'<span>No preview</span>'}</span>`}</a><div class="card-body"><div class="card-title" style="${styleStr(cs.name)}">${escapeHtml(title)}</div><div class="card-bottom"><span class="status ${statusClass(status)}" style="${styleStr(cs.status)}">${escapeHtml(status)}</span><a class="open-link" href="${escapeHtml(link)}" target="_blank" rel="noopener noreferrer">Open dashboard ↗</a></div></div>${isAuthoring?`<div class="card-actions"><button data-format="${escapeHtml(link)}">Format</button><button data-image="${escapeHtml(link)}">${img?'Replace image':'Add image'}</button>${img?`<button data-remove-image="${escapeHtml(link)}">Remove</button>`:''}</div>`:''}</article>`;
 }
 function showConfig(){ $('configPanel').hidden=false; if(window.tableau?.extensions?.dashboardContent) loadWorksheetList(); }
 function setMessage(s){$('configMessage').textContent=s;}
@@ -129,6 +145,7 @@ async function initTableau(){
     await tableau.extensions.initializeAsync();
     state.images=JSON.parse(tableau.extensions.settings.get('hub.images')||'{}');
     try{const t=JSON.parse(tableau.extensions.settings.get('hub.theme')||'{}');state.theme=Object.assign({},DEFAULT_THEME,t,{title:Object.assign({},DEFAULT_THEME.title,t.title||{})});}catch(e){}
+    try{state.cardStyles=JSON.parse(tableau.extensions.settings.get('hub.cards')||'{}');}catch(e){}
     applyTheme();
     state.worksheetName=tableau.extensions.settings.get('hub.worksheet')||'';
     isAuthoring=tableau.extensions.environment.mode==='authoring';
