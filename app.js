@@ -2,6 +2,8 @@
 'use strict';
 const $ = (id) => document.getElementById(id);
 const state = { rows: [], sectors: [], activeSector: '', status: 'All', worksheetName: '', images: {}, pendingImageLink: '' };
+let isAuthoring=false;
+document.body.classList.add('viewer');
 const FIELDS = ['Dashboard Tab Name','Dashboard Category','Dashboard Name','Dashboard Link','Status'];
 
 function T(p,ms,l){return Promise.race([p,new Promise((_,rej)=>setTimeout(()=>rej(new Error('timed out ('+l+')')),ms))]);}
@@ -56,7 +58,7 @@ function render(){
 function cardHtml(r){
   const link=safeLink(r['Dashboard Link']); const img=imageFor(r); const title=r['Dashboard Name'];
   const status=r.Status;
-  return `<article class="dashboard-card"><a class="preview" href="${escapeHtml(link)}" target="_blank" rel="noopener noreferrer" aria-label="Open ${escapeHtml(title)}">${img?`<img src="${img}" alt="${escapeHtml(title)} preview" />`:`<span class="image-empty"><span class="plus">＋</span><span>Add dashboard image</span></span>`}</a><div class="card-body"><div class="card-title">${escapeHtml(title)}</div><div class="card-bottom"><span class="status ${statusClass(status)}">${escapeHtml(status)}</span><a class="open-link" href="${escapeHtml(link)}" target="_blank" rel="noopener noreferrer">Open dashboard ↗</a></div></div><div class="card-actions"><button data-image="${escapeHtml(link)}">${img?'Replace image':'Add image'}</button>${img?`<button data-remove-image="${escapeHtml(link)}">Remove</button>`:''}</div></article>`;
+  return `<article class="dashboard-card"><a class="preview" href="${escapeHtml(link)}" target="_blank" rel="noopener noreferrer" aria-label="Open ${escapeHtml(title)}">${img?`<img src="${img}" alt="${escapeHtml(title)} preview" />`:`<span class="image-empty">${isAuthoring?'<span class="plus">＋</span><span>Add dashboard image</span>':'<span>No preview</span>'}</span>`}</a><div class="card-body"><div class="card-title">${escapeHtml(title)}</div><div class="card-bottom"><span class="status ${statusClass(status)}">${escapeHtml(status)}</span><a class="open-link" href="${escapeHtml(link)}" target="_blank" rel="noopener noreferrer">Open dashboard ↗</a></div></div>${isAuthoring?`<div class="card-actions"><button data-image="${escapeHtml(link)}">${img?'Replace image':'Add image'}</button>${img?`<button data-remove-image="${escapeHtml(link)}">Remove</button>`:''}</div>`:''}</article>`;
 }
 function showConfig(){ $('configPanel').hidden=false; if(window.tableau?.extensions?.dashboardContent) loadWorksheetList(); }
 function setMessage(s){$('configMessage').textContent=s;}
@@ -94,26 +96,31 @@ async function initTableau(){
     await tableau.extensions.initializeAsync();
     state.images=JSON.parse(tableau.extensions.settings.get('hub.images')||'{}');
     state.worksheetName=tableau.extensions.settings.get('hub.worksheet')||'';
-    $('configureBtn').hidden=false;
+    isAuthoring=tableau.extensions.environment.mode==='authoring';
+    document.body.classList.toggle('viewer',!isAuthoring);
+    $('configureBtn').hidden=!isAuthoring;
     await loadWorksheetList();
     if(state.worksheetName) await loadWorksheetData(state.worksheetName);
-    else {showConfig();$('dataState').textContent='Choose the directory worksheet in Configure.';}
-    const mode=tableau.extensions.environment.mode;
-    if(mode==='authoring') $('configureBtn').hidden=false;
+    else if(isAuthoring){showConfig();$('dataState').textContent='Choose the directory worksheet in Configure.';}
+    else $('dataState').textContent='Not configured yet. Please contact the workbook author.';
   }catch(e){console.error(e);$('dataState').textContent='Tableau initialization failed: '+e.message;}
 }
 async function saveImages(){
+  if(!isAuthoring) throw new Error('Editing is only available in authoring mode.');
   tableau.extensions.settings.set('hub.images',JSON.stringify(state.images));
   await tableau.extensions.settings.saveAsync();
 }
 function chooseImage(link){
+  if(!isAuthoring) return;
   state.pendingImageLink=link;$('imagePicker').value='';$('imagePicker').click();
 }
 async function compressImage(file){
   const data=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=reject;r.readAsDataURL(file);});
   const img=await new Promise((resolve,reject)=>{const i=new Image();i.onload=()=>resolve(i);i.onerror=reject;i.src=data;});
-  const canvas=document.createElement('canvas');const maxW=640,maxH=360;const scale=Math.min(maxW/img.width,maxH/img.height,1);canvas.width=Math.round(img.width*scale);canvas.height=Math.round(img.height*scale);
-  const ctx=canvas.getContext('2d');ctx.drawImage(img,0,0,canvas.width,canvas.height);return canvas.toDataURL('image/jpeg',0.78);
+  const canvas=document.createElement('canvas');canvas.width=640;canvas.height=360;
+  let sx=0,sy=0,sw=img.width,sh=Math.round(img.width*9/16);
+  if(sh>img.height){sh=img.height;sw=Math.round(sh*16/9);sx=Math.round((img.width-sw)/2);}
+  const ctx=canvas.getContext('2d');ctx.drawImage(img,sx,sy,sw,sh,0,0,640,360);return canvas.toDataURL('image/jpeg',0.78);
 }
 async function removeImage(link){delete state.images[link];try{await saveImages();render();}catch(e){alert('Could not save image settings: '+e.message);}}
 $('configureBtn').addEventListener('click',showConfig);
