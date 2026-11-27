@@ -4,6 +4,39 @@ const $ = (id) => document.getElementById(id);
 const state = { rows: [], sectors: [], activeSector: '', status: 'All', worksheetName: '', images: {}, pendingImageLink: '' };
 let isAuthoring=false;
 document.body.classList.add('viewer');
+const DEFAULT_THEME={title:{text:'Navigation Hub',color:'',font:'',size:26},headerBg:'',pageBg:''};
+state.theme=JSON.parse(JSON.stringify(DEFAULT_THEME));
+function applyTheme(){
+  const t=state.theme,el=$('appTitle');
+  el.textContent=t.title.text||DEFAULT_THEME.title.text;
+  el.style.color=t.title.color||'';el.style.fontFamily=t.title.font||'';el.style.fontSize=(t.title.size||26)+'px';
+  const r=document.documentElement.style;
+  t.headerBg?r.setProperty('--header-bg',t.headerBg):r.removeProperty('--header-bg');
+  t.pageBg?r.setProperty('--page-bg',t.pageBg):r.removeProperty('--page-bg');
+}
+async function saveTheme(){
+  if(!isAuthoring) throw new Error('Editing is only available in authoring mode.');
+  tableau.extensions.settings.set('hub.theme',JSON.stringify(state.theme));
+  await tableau.extensions.settings.saveAsync();
+}
+async function openDialog(payload){
+  if(!isAuthoring) return null;
+  try{
+    const url=new URL('dialog.html',location.href).href;
+    const opts={width:360,height:payload.kind==='text'?460:260};
+    if(tableau.DialogStyle) opts.dialogStyle=tableau.DialogStyle.Modal;
+    const res=await tableau.extensions.ui.displayDialogAsync(url,JSON.stringify(payload),opts);
+    return res?JSON.parse(res):null;
+  }catch(e){ console.warn('Dialog closed or failed:',e); if(e&&e.errorCode&&e.errorCode!=='dialog-closed-by-user') $('dataState').textContent='Dialog error: '+e.message; return null; }
+}
+async function editTitle(){
+  const r=await openDialog({kind:'text',allowText:true,heading:'Edit title',values:state.theme.title});
+  if(r){state.theme.title=Object.assign({},state.theme.title,r);applyTheme();try{await saveTheme();}catch(e){alert('Could not save: '+e.message);}}
+}
+async function editColor(key,heading,fallback){
+  const r=await openDialog({kind:'color',heading,values:{color:state.theme[key]||fallback}});
+  if(r){state.theme[key]=r.color;applyTheme();try{await saveTheme();}catch(e){alert('Could not save: '+e.message);}}
+}
 const FIELDS = ['Dashboard Tab Name','Dashboard Category','Dashboard Name','Dashboard Link','Status'];
 
 function T(p,ms,l){return Promise.race([p,new Promise((_,rej)=>setTimeout(()=>rej(new Error('timed out ('+l+')')),ms))]);}
@@ -95,6 +128,8 @@ async function initTableau(){
   try{
     await tableau.extensions.initializeAsync();
     state.images=JSON.parse(tableau.extensions.settings.get('hub.images')||'{}');
+    try{const t=JSON.parse(tableau.extensions.settings.get('hub.theme')||'{}');state.theme=Object.assign({},DEFAULT_THEME,t,{title:Object.assign({},DEFAULT_THEME.title,t.title||{})});}catch(e){}
+    applyTheme();
     state.worksheetName=tableau.extensions.settings.get('hub.worksheet')||'';
     isAuthoring=tableau.extensions.environment.mode==='authoring';
     document.body.classList.toggle('viewer',!isAuthoring);
@@ -124,6 +159,9 @@ async function compressImage(file){
 }
 async function removeImage(link){delete state.images[link];try{await saveImages();render();}catch(e){alert('Could not save image settings: '+e.message);}}
 $('configureBtn').addEventListener('click',showConfig);
+$('editTitleBtn').addEventListener('click',editTitle);
+$('headerColorBtn').addEventListener('click',()=>editColor('headerBg','Header color','#ffffff'));
+$('bgColorBtn').addEventListener('click',()=>editColor('pageBg','Page background color','#f5f7fa'));
 $('closeConfig').addEventListener('click',()=>$('configPanel').hidden=true);
 $('saveWorksheetBtn').addEventListener('click',async()=>{
   const name=$('worksheetSelect').value;if(!name)return;

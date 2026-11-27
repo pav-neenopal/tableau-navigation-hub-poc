@@ -10,8 +10,10 @@
 </head>
 <body>
   <header class="app-header">
-    <div><div class="eyebrow">TABLEAU • DATA APP POC</div><h1>Navigation Hub</h1></div>
+    <div><div class="eyebrow">TABLEAU • DATA APP POC</div><h1><span id="appTitle">Navigation Hub</span> <button id="editTitleBtn" class="edit-btn author-only" title="Edit title" aria-label="Edit title">✎</button></h1></div>
     <div class="toolbar">
+      <button id="headerColorBtn" class="secondary author-only">Header color</button>
+      <button id="bgColorBtn" class="secondary author-only">Background color</button>
       <button id="configureBtn" class="secondary" hidden>Configure</button>
       <button id="refreshBtn" class="secondary">Refresh data</button>
     </div>
