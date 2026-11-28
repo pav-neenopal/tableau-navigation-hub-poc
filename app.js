@@ -4,7 +4,7 @@ const $ = (id) => document.getElementById(id);
 const state = { rows: [], sectors: [], activeSector: '', status: 'All', worksheetName: '', images: {}, pendingImageLink: '' };
 let isAuthoring=false;
 document.body.classList.add('viewer');
-const DEFAULT_THEME={title:{text:'Navigation Hub',color:'',font:'',size:26,w:null,h:null},desc:{text:'',color:'',font:'',size:14,w:null,h:null},logo:{src:'',w:null,h:56},header:{radius:10,height:null,padding:16,outer:0},summary:{radius:10,height:null,padding:12,outer:0,bg:''},tile:{w:null,h:null,bg:''},tileTitle:{},tileNum:{},tabs:{},headings:{},headerBg:'',pageBg:''};
+const DEFAULT_THEME={title:{text:'Navigation Hub',color:'',font:'',size:26,w:null,h:null},desc:{text:'',color:'',font:'',size:14,w:null,h:null},logo:{src:'',w:null,h:56},header:{radius:10,height:null,padding:16,outer:0},summary:{radius:10,height:null,padding:12,outer:0,bg:''},tile:{w:null,h:null,bg:''},tileTitle:{},tileNum:{},statusColors:{},tabs:{},headings:{},headerBg:'',pageBg:''};
 state.cardStyles={};
 function styleStr(s){s=s||{};const p=[];if(s.color)p.push('color:'+s.color);if(s.font)p.push('font-family:'+s.font);if(s.size)p.push('font-size:'+s.size+'px');return escapeHtml(p.join(';'));}
 state.theme=JSON.parse(JSON.stringify(DEFAULT_THEME));
@@ -59,6 +59,13 @@ async function editLogoSize(){
 async function editHeader(){
   const r=await openDialog({heading:'Header layout',groups:[{key:'header',label:'Header container',numsOnly:true,nums:[{key:'radius',label:'Corner rounding (px)'},{key:'height',label:'Height (px)'},{key:'padding',label:'Inner padding (px)'},{key:'outer',label:'Outer padding (px)'}],values:state.theme.header}]});
   if(r){state.theme.header=Object.assign({},state.theme.header,r.header);applyTheme();persist();}
+}
+async function editStatusColors(){
+  const all=[...new Set(state.rows.map(r=>r.Status))];
+  const groups=[{key:'__all',label:'All statuses / Total',colorOnly:true,fallback:defaultAccent('__all'),values:{color:state.theme.statusColors['__all']}}]
+    .concat(all.map(s=>({key:skey(s),label:s,colorOnly:true,fallback:defaultAccent(s),values:{color:state.theme.statusColors[skey(s)]}})));
+  const r=await openDialog({heading:'Status colors',groups});
+  if(r){const sc={};Object.keys(r).forEach(k=>{if(r[k].color)sc[k]=r[k].color;});state.theme.statusColors=sc;render();persist();}
 }
 async function editSummary(){
   const r=await openDialog({heading:'Summary layout',groups:[{key:'summary',label:'Summary container',numsOnly:true,nums:[{key:'radius',label:'Corner rounding (px)'},{key:'height',label:'Height (px)'},{key:'padding',label:'Inner padding (px)'},{key:'outer',label:'Outer padding (px)'}],values:state.theme.summary},{key:'sbg',label:'Background',colorOnly:true,fallback:'#ffffff',values:{color:state.theme.summary.bg}}]});
@@ -122,14 +129,20 @@ function tableRows(table){
   return out;
 }
 function normalizeStatus(s){ return norm(s)||'No status'; }
-const KNOWN_STATUS={live:['#e6f4ea','#287443'],development:['#fff2d9','#916000'],review:['#e8edff','#4058a8']};
-const STATUS_PALETTE=[['#fde8e8','#a12d2d'],['#e0f5f5','#17696b'],['#f1e8fd','#6b3fa0'],['#fdeaf3','#a1346b'],['#eef2dc','#5b6b1e'],['#e8eef5','#3d5069']];
-function statusInline(s){
-  const k=String(s).toLowerCase().replace(/[^a-z]/g,'');
-  let c=KNOWN_STATUS[k]||(k==='inreview'||k==='qc'?KNOWN_STATUS.review:null)||(k==='dev'||k==='indevelopment'?KNOWN_STATUS.development:null)||(k==='published'||k==='production'?KNOWN_STATUS.live:null);
-  if(!c){let h=0;for(const ch of k)h=(h*31+ch.charCodeAt(0))>>>0;c=STATUS_PALETTE[h%STATUS_PALETTE.length];}
-  return escapeHtml('background:'+c[0]+';color:'+c[1]);
+const KNOWN_ACCENT={live:'#2e9e5b',development:'#e0a100',review:'#4a6fe0'};
+const ACCENT_PALETTE=['#d64545','#1d9aa0','#8a56c9','#d6458a','#7f9a21','#5b7390'];
+function skey(s){return s==='__all'?'__all':String(s).toLowerCase().trim();}
+function defaultAccent(s){
+  const key=skey(s);if(key==='__all')return '#27364b';
+  const k=key.replace(/[^a-z]/g,'');
+  if(KNOWN_ACCENT[k])return KNOWN_ACCENT[k];
+  if(k==='inreview'||k==='qc')return KNOWN_ACCENT.review;
+  if(k==='dev'||k==='indevelopment')return KNOWN_ACCENT.development;
+  if(k==='published'||k==='production')return KNOWN_ACCENT.live;
+  let h=0;for(const ch of k)h=(h*31+ch.charCodeAt(0))>>>0;return ACCENT_PALETTE[h%ACCENT_PALETTE.length];
 }
+function accentFor(s){return (state.theme.statusColors||{})[skey(s)]||defaultAccent(s);}
+function statusInline(s){const c=accentFor(s);return escapeHtml('background:'+c+'22;color:'+c);}
 function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 function statusClass(s){return s.toLowerCase().replace(/[^a-z]/g,'');}
 function groupBy(arr,key){return arr.reduce((a,r)=>((a[r[key]] ||= []).push(r),a),{});}
@@ -138,9 +151,9 @@ function renderSummary(rows){
   const t=state.theme,box=$('summaryBox');
   box.hidden=!state.rows.length;
   const statuses=[...new Set(rows.map(r=>r.Status))];
-  const items=[['Total',rows.length],...statuses.map(s=>[s,rows.filter(r=>r.Status===s).length])];
+  const items=[['Total',rows.length,accentFor('__all')],...statuses.map(s=>[s,rows.filter(r=>r.Status===s).length,accentFor(s)])];
   const w=t.tile.w,ts=[w?'flex:0 0 '+w+'px':'',t.tile.h?'height:'+t.tile.h+'px':'',t.tile.bg?'background:'+t.tile.bg:''].filter(Boolean).join(';');
-  $('summaryTiles').innerHTML=items.map(([lab,n])=>`<div class="sum-tile hdr-box" data-label="Tile" style="${escapeHtml(ts)}"><div class="sum-title hdr-box" data-label="Tile title" style="${styleStr(t.tileTitle)}"><span>${escapeHtml(lab)}</span><span class="hdr-tools author-only"><button data-sum="tileTitle" title="Edit title text">✎</button></span></div><div class="sum-num hdr-box" data-label="Tile number" style="${styleStr(t.tileNum)}"><span>${n} ${n===1?'dashboard':'dashboards'}</span><span class="hdr-tools author-only"><button data-sum="tileNum" title="Edit number text">✎</button></span></div><span class="hdr-tools author-only"><button data-sum="size" title="Tile size and background">✎</button></span></div>`).join('');
+  $('summaryTiles').innerHTML=items.map(([lab,n,ac])=>`<div class="sum-tile hdr-box" data-label="Tile" style="${escapeHtml([ts,'border-top:4px solid '+ac].filter(Boolean).join(';'))}"><div class="sum-title hdr-box" data-label="Tile title" style="${styleStr(t.tileTitle)}"><span>${escapeHtml(lab)}</span><span class="hdr-tools author-only"><button data-sum="tileTitle" title="Edit title text">✎</button></span></div><div class="sum-num hdr-box" data-label="Tile number" style="${styleStr(t.tileNum)}"><span>${n} ${n===1?'dashboard':'dashboards'}</span><span class="hdr-tools author-only"><button data-sum="tileNum" title="Edit number text">✎</button></span></div><span class="hdr-tools author-only"><button data-sum="size" title="Tile size and background">✎</button></span></div>`).join('');
 }
 function render(){
   const sectors = [...new Set(state.rows.map(r=>r['Dashboard Tab Name']).filter(Boolean))];
@@ -152,8 +165,10 @@ function render(){
   const secRows=state.rows.filter(r=>r['Dashboard Tab Name']===state.activeSector);
   const statuses=[...new Set(secRows.map(r=>r.Status))];
   if(state.status!=='All'&&!statuses.includes(state.status)) state.status='All';
-  $('statusFilter').innerHTML=['All',...statuses].map(s=>`<button class="filter-chip ${s===state.status?'active':''}" data-status="${escapeHtml(s)}">${s==='All'?'All statuses':escapeHtml(s)}</button>`).join('');
+  $('statusFilter').innerHTML=['All',...statuses].map(s=>{const ac=accentFor(s==='All'?'__all':s),on=s===state.status;
+    return `<button class="filter-chip ${on?'active':''}" data-status="${escapeHtml(s)}" style="${escapeHtml(on?'background:'+ac+';border-color:'+ac+';color:#fff':'border-color:'+ac+';color:'+ac)}">${s==='All'?'All statuses':escapeHtml(s)}</button>`;}).join('')+'<button class="edit-btn author-only" data-edit-status title="Edit status colors">✎</button>';
   $('statusFilter').querySelectorAll('.filter-chip').forEach(b=>b.addEventListener('click',()=>{state.status=b.dataset.status;render();}));
+  const es=$('statusFilter').querySelector('[data-edit-status]');if(es)es.addEventListener('click',editStatusColors);
   renderSummary(secRows);
   let rows=secRows;
   if(state.status!=='All') rows=rows.filter(r=>r.Status===state.status);
