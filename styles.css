@@ -25,3 +25,12 @@ body:not(.viewer) .hdr-box:hover{outline:2px dashed #2f80ed;background:#2f80ed14
 body:not(.viewer) .hdr-box:hover::before{content:attr(data-label);position:absolute;top:-11px;left:8px;font-size:10px;font-weight:700;color:#fff;background:#2f80ed;padding:1px 6px;border-radius:4px;z-index:5;pointer-events:none}
 body:not(.viewer) .app-header:hover:not(:has(.hdr-box:hover)){outline:2px dashed #f2994a}
 body:not(.viewer) .app-header:hover:not(:has(.hdr-box:hover))::before{content:attr(data-label);position:absolute;top:-11px;left:8px;font-size:10px;font-weight:700;color:#fff;background:#f2994a;padding:1px 6px;border-radius:4px;z-index:5;pointer-events:none}
+
+.app-header{overflow:hidden;flex-wrap:nowrap;align-items:center}
+.hdr-main{flex:1 1 auto;min-width:0;min-height:0;max-height:100%;overflow:hidden;align-items:center;align-items:safe center}
+.hdr-text{min-width:0;min-height:0}
+.hdr-box{overflow:hidden;min-width:0;max-width:100%}
+.toolbar{flex:0 1 auto;flex-wrap:wrap;justify-content:flex-end;min-width:0;max-height:100%;overflow:hidden}
+.hdr-tools{top:0;right:0}
+body:not(.viewer) .hdr-box:hover,body:not(.viewer) .app-header:hover:not(:has(.hdr-box:hover)){outline-offset:-2px}
+body:not(.viewer) .hdr-box:hover::before,body:not(.viewer) .app-header:hover:not(:has(.hdr-box:hover))::before{top:0;left:0;border-radius:0 0 4px 0}

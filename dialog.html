@@ -1,7 +1,31 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"/><title>Edit</title>
 <script src="tableau.extensions.1.latest.js"></script>
-<style>body{font-family:Segoe UI,Arial,sans-serif;font-size:14px;padding:18px;color:#1f2937}h2{margin:0 0 14px;font-size:16px}label{display:block;font-weight:600;font-size:12px;margin:12px 0 4px}input,select{width:100%;padding:8px;border:1px solid #d0d5dd;border-radius:6px;font:inherit;box-sizing:border-box}input[type=color]{height:38px;padding:2px}.row{display:flex;gap:8px;margin-top:20px}button{flex:1;padding:9px;border-radius:7px;border:1px solid #d0d5dd;background:#fff;cursor:pointer;font:inherit;font-weight:600}button.primary{background:#27364b;color:#fff;border-color:#27364b}fieldset{border:1px solid #e2e6ec;border-radius:8px;margin:0 0 12px;padding:2px 12px 12px}legend{font-weight:700;font-size:12px;color:#596579}.crow{display:flex;align-items:center;gap:12px}.crow input[type=color]{width:70px}.chk{display:flex;align-items:center;gap:5px;margin:0;font-weight:400}.chk input{width:auto}#fields{max-height:calc(100vh - 110px);overflow:auto}</style></head>
-<body><h2 id="heading">Edit</h2><div id="fields"></div>
-<div class="row"><button id="cancel">Cancel</button><button id="save" class="primary">Save</button></div>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:Segoe UI,Arial,sans-serif;font-size:13px;color:#1f2937;background:#f4f6f9}
+.wrap{display:flex;flex-direction:column;height:100vh}
+.head{padding:14px 18px;background:#fff;border-bottom:1px solid #e3e7ed}
+.head h2{margin:0;font-size:16px;font-weight:650}
+.body{flex:1;overflow:auto;padding:14px 18px}
+.card{background:#fff;border:1px solid #e3e7ed;border-radius:10px;padding:12px 14px;margin-bottom:12px}
+.card h3{margin:0 0 10px;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:#6b7686}
+.field{margin-bottom:10px;min-width:0}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+label{display:block;font-size:12px;font-weight:600;color:#3b4656;margin-bottom:4px}
+input[type=text],input[type=number],select{width:100%;padding:8px 9px;border:1px solid #d0d5dd;border-radius:7px;font:inherit;background:#fff}
+input:focus,select:focus{outline:2px solid #2f80ed55;border-color:#2f80ed}
+.crow{display:flex;align-items:center;gap:10px}
+input[type=color]{width:38px;height:34px;padding:2px;border:1px solid #d0d5dd;border-radius:7px;background:#fff;cursor:pointer}
+input[type=color]:disabled{opacity:.35;cursor:not-allowed}
+.chk{display:flex;align-items:center;gap:6px;margin:0;font-weight:500;cursor:pointer}
+.chk input{width:15px;height:15px;margin:0}
+.preview{border:1px dashed #cfd6e0;border-radius:7px;padding:9px 11px;margin-bottom:10px;background:#fafbfc;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.foot{display:flex;justify-content:flex-end;gap:8px;padding:12px 18px;background:#fff;border-top:1px solid #e3e7ed}
+button{padding:8px 18px;border-radius:7px;border:1px solid #d0d5dd;background:#fff;cursor:pointer;font:inherit;font-weight:600;color:#344054}
+button.primary{background:#27364b;color:#fff;border-color:#27364b}
+button:hover{filter:brightness(.97)}
+</style></head>
+<body><div class="wrap"><div class="head"><h2 id="heading">Edit</h2></div><div class="body" id="fields"></div>
+<div class="foot"><button id="cancel">Cancel</button><button id="save" class="primary">Save</button></div></div>
 <script src="dialog.js"></script></body></html>

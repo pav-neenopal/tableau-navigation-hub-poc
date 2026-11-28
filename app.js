@@ -4,7 +4,7 @@ const $ = (id) => document.getElementById(id);
 const state = { rows: [], sectors: [], activeSector: '', status: 'All', worksheetName: '', images: {}, pendingImageLink: '' };
 let isAuthoring=false;
 document.body.classList.add('viewer');
-const DEFAULT_THEME={title:{text:'Navigation Hub',color:'',font:'',size:26,w:null,h:null},desc:{text:'',color:'',font:'',size:14,w:null,h:null},logo:{src:'',w:null,h:56},header:{radius:10,height:null,padding:16},tabs:{},headings:{},headerBg:'',pageBg:''};
+const DEFAULT_THEME={title:{text:'Navigation Hub',color:'',font:'',size:26,w:null,h:null},desc:{text:'',color:'',font:'',size:14,w:null,h:null},logo:{src:'',w:null,h:56},header:{radius:10,height:null,padding:16,outer:0},tabs:{},headings:{},headerBg:'',pageBg:''};
 state.cardStyles={};
 function styleStr(s){s=s||{};const p=[];if(s.color)p.push('color:'+s.color);if(s.font)p.push('font-family:'+s.font);if(s.size)p.push('font-size:'+s.size+'px');return escapeHtml(p.join(';'));}
 state.theme=JSON.parse(JSON.stringify(DEFAULT_THEME));
@@ -21,7 +21,7 @@ function applyTheme(){
   const has=!!t.logo.src,lb=$('logoBox');
   if(has)$('logoImg').src=t.logo.src;$('logoImg').hidden=!has;$('logoEmpty').hidden=has;$('logoRemoveBtn').hidden=!has;
   lb.hidden=!has&&!isAuthoring;lb.style.height=px(t.logo.h||56);lb.style.width=px(t.logo.w);
-  const hb=$('headerBox');hb.style.borderRadius=px(t.header.radius);hb.style.height=px(t.header.height);hb.style.padding=px(t.header.padding);
+  const hb=$('headerBox');hb.style.borderRadius=px(t.header.radius);hb.style.height=px(t.header.height);hb.style.padding=px(t.header.padding);hb.style.margin=px(t.header.outer);
   t.headerBg?r.setProperty('--header-bg',t.headerBg):r.removeProperty('--header-bg');
   t.pageBg?r.setProperty('--page-bg',t.pageBg):r.removeProperty('--page-bg');
 }
@@ -34,14 +34,14 @@ async function openDialog(payload){
   if(!isAuthoring) return null;
   try{
     const url=new URL('dialog.html',location.href).href;
-    const opts={width:380,height:Math.min(720,payload.groups.reduce((s,g)=>s+(g.numsOnly?40:(g.colorOnly?95:(g.allowText?265:225)))+(g.nums||[]).length*58,150))};
+    const opts={width:420,height:Math.min(780,payload.groups.reduce((s,g)=>s+(g.numsOnly?50:(g.colorOnly?120:(g.allowText?330:270)))+Math.ceil((g.nums||[]).length/2)*66,130))};
     if(tableau.DialogStyle) opts.dialogStyle=tableau.DialogStyle.Modal;
     const res=await tableau.extensions.ui.displayDialogAsync(url,JSON.stringify(payload),opts);
     return res?JSON.parse(res):null;
   }catch(e){ console.warn('Dialog closed or failed:',e); if(e&&e.errorCode&&e.errorCode!=='dialog-closed-by-user') $('dataState').textContent='Dialog error: '+e.message; return null; }
 }
 async function persist(){try{await saveTheme();}catch(e){alert('Could not save: '+e.message);}}
-const WH=[{key:'w',label:'Width (px, blank = auto)'},{key:'h',label:'Height (px, blank = auto)'}];
+const WH=[{key:'w',label:'Width (px)'},{key:'h',label:'Height (px)'}];
 async function editTitle(){
   const r=await openDialog({heading:'Edit title',groups:[{key:'title',label:'Title',allowText:true,nums:WH,values:state.theme.title}]});
   if(r){state.theme.title=Object.assign({},state.theme.title,r.title);applyTheme();persist();}
@@ -55,7 +55,7 @@ async function editLogoSize(){
   if(r){state.theme.logo=Object.assign({},state.theme.logo,r.logo);applyTheme();persist();}
 }
 async function editHeader(){
-  const r=await openDialog({heading:'Header layout',groups:[{key:'header',label:'Header container',numsOnly:true,nums:[{key:'radius',label:'Corner rounding (px)'},{key:'height',label:'Height (px, blank = auto)'},{key:'padding',label:'Padding (px)'}],values:state.theme.header}]});
+  const r=await openDialog({heading:'Header layout',groups:[{key:'header',label:'Header container',numsOnly:true,nums:[{key:'radius',label:'Corner rounding (px)'},{key:'height',label:'Height (px)'},{key:'padding',label:'Inner padding (px)'},{key:'outer',label:'Outer padding (px)'}],values:state.theme.header}]});
   if(r){state.theme.header=Object.assign({},state.theme.header,r.header);applyTheme();persist();}
 }
 async function logoFromFile(file){
