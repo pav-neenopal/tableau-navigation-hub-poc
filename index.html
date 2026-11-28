@@ -9,15 +9,27 @@
   <script src="tableau.extensions.1.latest.js"></script>
 </head>
 <body>
-  <header class="app-header">
-    <div><div class="eyebrow">TABLEAU • DATA APP POC</div><h1><span id="appTitle">Navigation Hub</span> <button id="editTitleBtn" class="edit-btn author-only" title="Edit title" aria-label="Edit title">✎</button></h1></div>
+  <header class="app-header" id="headerBox" data-label="Header">
+    <div class="hdr-main">
+      <div id="logoBox" class="hdr-box logo-box" data-label="Logo" hidden>
+        <img id="logoImg" alt="Logo" hidden />
+        <span id="logoEmpty" class="hdr-empty author-only">＋ Logo</span>
+        <span class="hdr-tools author-only"><button id="logoUploadBtn" title="Upload logo">⬆</button><button id="logoSizeBtn" title="Logo size">✎</button><button id="logoRemoveBtn" title="Remove logo">✕</button></span>
+      </div>
+      <div class="hdr-text">
+        <div id="titleBox" class="hdr-box" data-label="Title"><h1 id="appTitle">Navigation Hub</h1><span class="hdr-tools author-only"><button id="editTitleBtn" title="Edit title">✎</button></span></div>
+        <div id="descBox" class="hdr-box" data-label="Description" hidden><p id="appDesc"></p><span class="hdr-tools author-only"><button id="editDescBtn" title="Edit description">✎</button></span></div>
+      </div>
+    </div>
     <div class="toolbar">
+      <button id="headerLayoutBtn" class="secondary author-only">Header layout</button>
       <button id="headerColorBtn" class="secondary author-only">Header color</button>
       <button id="bgColorBtn" class="secondary author-only">Background color</button>
       <button id="configureBtn" class="secondary" hidden>Configure</button>
       <button id="refreshBtn" class="secondary">Refresh data</button>
     </div>
   </header>
+  <input type="file" id="logoPicker" accept="image/*" hidden />
 
   <section id="configPanel" class="config-panel" hidden>
     <div class="config-head"><h2>Configure Hub</h2><button id="closeConfig" class="icon-btn" aria-label="Close configuration">×</button></div>

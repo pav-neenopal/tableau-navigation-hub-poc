@@ -6,3 +6,22 @@ html,body{background:var(--page-bg,#f5f7fa)}
 .app-header{background:var(--header-bg,transparent);padding:16px 18px;border-radius:10px}
 .edit-btn{background:transparent;color:#667085;font-size:16px;padding:0 6px;border:0}
 body.viewer .author-only{display:none !important}
+
+[hidden]{display:none !important}
+.app-header{position:relative;flex-wrap:wrap}
+.hdr-main{display:flex;align-items:center;gap:14px;min-width:0}
+.hdr-text{display:flex;flex-direction:column;gap:4px;min-width:0}
+.hdr-box{position:relative}
+.hdr-box>h1,.hdr-box>p{margin:0;height:100%;overflow:hidden}
+.hdr-box>h1{font-size:26px}
+.hdr-box>p{color:#6b7280;font-size:14px}
+.hdr-box>p.placeholder{font-style:italic;opacity:.6}
+.logo-box img{display:block;height:100%;width:auto;max-width:100%;object-fit:contain}
+.hdr-empty{display:flex;align-items:center;justify-content:center;height:100%;min-width:90px;border:1px dashed #b6bfcc;border-radius:6px;color:#8a94a3;font-size:12px;cursor:pointer}
+.hdr-tools{position:absolute;top:-11px;right:6px;display:none;gap:2px;z-index:6}
+.hdr-tools button{padding:1px 6px;font-size:11px;background:#2f80ed;border-radius:4px}
+body:not(.viewer) .hdr-box:hover .hdr-tools{display:flex}
+body:not(.viewer) .hdr-box:hover{outline:2px dashed #2f80ed;background:#2f80ed14}
+body:not(.viewer) .hdr-box:hover::before{content:attr(data-label);position:absolute;top:-11px;left:8px;font-size:10px;font-weight:700;color:#fff;background:#2f80ed;padding:1px 6px;border-radius:4px;z-index:5;pointer-events:none}
+body:not(.viewer) .app-header:hover:not(:has(.hdr-box:hover)){outline:2px dashed #f2994a}
+body:not(.viewer) .app-header:hover:not(:has(.hdr-box:hover))::before{content:attr(data-label);position:absolute;top:-11px;left:8px;font-size:10px;font-weight:700;color:#fff;background:#f2994a;padding:1px 6px;border-radius:4px;z-index:5;pointer-events:none}

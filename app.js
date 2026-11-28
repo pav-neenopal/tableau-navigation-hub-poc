@@ -4,15 +4,24 @@ const $ = (id) => document.getElementById(id);
 const state = { rows: [], sectors: [], activeSector: '', status: 'All', worksheetName: '', images: {}, pendingImageLink: '' };
 let isAuthoring=false;
 document.body.classList.add('viewer');
-const DEFAULT_THEME={title:{text:'Navigation Hub',color:'',font:'',size:26},tabs:{},headings:{},headerBg:'',pageBg:''};
+const DEFAULT_THEME={title:{text:'Navigation Hub',color:'',font:'',size:26,w:null,h:null},desc:{text:'',color:'',font:'',size:14,w:null,h:null},logo:{src:'',w:null,h:56},header:{radius:10,height:null,padding:16},tabs:{},headings:{},headerBg:'',pageBg:''};
 state.cardStyles={};
 function styleStr(s){s=s||{};const p=[];if(s.color)p.push('color:'+s.color);if(s.font)p.push('font-family:'+s.font);if(s.size)p.push('font-size:'+s.size+'px');return escapeHtml(p.join(';'));}
 state.theme=JSON.parse(JSON.stringify(DEFAULT_THEME));
+function px(v){return (v||v===0)?v+'px':'';}
 function applyTheme(){
-  const t=state.theme,el=$('appTitle');
-  el.textContent=t.title.text||DEFAULT_THEME.title.text;
-  el.style.color=t.title.color||'';el.style.fontFamily=t.title.font||'';el.style.fontSize=(t.title.size||26)+'px';
-  const r=document.documentElement.style;
+  const t=state.theme,r=document.documentElement.style;
+  const te=$('appTitle');te.textContent=t.title.text||DEFAULT_THEME.title.text;
+  te.style.color=t.title.color||'';te.style.fontFamily=t.title.font||'';te.style.fontSize=px(t.title.size||26);
+  $('titleBox').style.width=px(t.title.w);$('titleBox').style.height=px(t.title.h);
+  const d=t.desc,de=$('appDesc'),db=$('descBox');
+  de.textContent=d.text||(isAuthoring?'Add description':'');de.classList.toggle('placeholder',!d.text);
+  de.style.color=d.color||'';de.style.fontFamily=d.font||'';de.style.fontSize=px(d.size||14);
+  db.style.width=px(d.w);db.style.height=px(d.h);db.hidden=!d.text&&!isAuthoring;
+  const has=!!t.logo.src,lb=$('logoBox');
+  if(has)$('logoImg').src=t.logo.src;$('logoImg').hidden=!has;$('logoEmpty').hidden=has;$('logoRemoveBtn').hidden=!has;
+  lb.hidden=!has&&!isAuthoring;lb.style.height=px(t.logo.h||56);lb.style.width=px(t.logo.w);
+  const hb=$('headerBox');hb.style.borderRadius=px(t.header.radius);hb.style.height=px(t.header.height);hb.style.padding=px(t.header.padding);
   t.headerBg?r.setProperty('--header-bg',t.headerBg):r.removeProperty('--header-bg');
   t.pageBg?r.setProperty('--page-bg',t.pageBg):r.removeProperty('--page-bg');
 }
@@ -25,16 +34,39 @@ async function openDialog(payload){
   if(!isAuthoring) return null;
   try{
     const url=new URL('dialog.html',location.href).href;
-    const opts={width:380,height:Math.min(720,payload.groups.reduce((s,g)=>s+(g.colorOnly?95:(g.allowText?265:225)),150))};
+    const opts={width:380,height:Math.min(720,payload.groups.reduce((s,g)=>s+(g.numsOnly?40:(g.colorOnly?95:(g.allowText?265:225)))+(g.nums||[]).length*58,150))};
     if(tableau.DialogStyle) opts.dialogStyle=tableau.DialogStyle.Modal;
     const res=await tableau.extensions.ui.displayDialogAsync(url,JSON.stringify(payload),opts);
     return res?JSON.parse(res):null;
   }catch(e){ console.warn('Dialog closed or failed:',e); if(e&&e.errorCode&&e.errorCode!=='dialog-closed-by-user') $('dataState').textContent='Dialog error: '+e.message; return null; }
 }
 async function persist(){try{await saveTheme();}catch(e){alert('Could not save: '+e.message);}}
+const WH=[{key:'w',label:'Width (px, blank = auto)'},{key:'h',label:'Height (px, blank = auto)'}];
 async function editTitle(){
-  const r=await openDialog({heading:'Edit title',groups:[{key:'title',label:'Title',allowText:true,values:state.theme.title}]});
+  const r=await openDialog({heading:'Edit title',groups:[{key:'title',label:'Title',allowText:true,nums:WH,values:state.theme.title}]});
   if(r){state.theme.title=Object.assign({},state.theme.title,r.title);applyTheme();persist();}
+}
+async function editDesc(){
+  const r=await openDialog({heading:'Edit description',groups:[{key:'desc',label:'Description',allowText:true,nums:WH,values:state.theme.desc}]});
+  if(r){state.theme.desc=Object.assign({},state.theme.desc,r.desc);if(!r.desc.text)state.theme.desc.text='';applyTheme();persist();}
+}
+async function editLogoSize(){
+  const r=await openDialog({heading:'Logo size',groups:[{key:'logo',label:'Logo container',numsOnly:true,nums:WH,values:state.theme.logo}]});
+  if(r){state.theme.logo=Object.assign({},state.theme.logo,r.logo);applyTheme();persist();}
+}
+async function editHeader(){
+  const r=await openDialog({heading:'Header layout',groups:[{key:'header',label:'Header container',numsOnly:true,nums:[{key:'radius',label:'Corner rounding (px)'},{key:'height',label:'Height (px, blank = auto)'},{key:'padding',label:'Padding (px)'}],values:state.theme.header}]});
+  if(r){state.theme.header=Object.assign({},state.theme.header,r.header);applyTheme();persist();}
+}
+async function logoFromFile(file){
+  if(!isAuthoring||!file)return;
+  try{
+    const data=await new Promise((res,rej)=>{const f=new FileReader();f.onload=()=>res(f.result);f.onerror=rej;f.readAsDataURL(file);});
+    const img=await new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=rej;i.src=data;});
+    const s=Math.min(1,400/img.width,200/img.height);const cv=document.createElement('canvas');cv.width=Math.round(img.width*s);cv.height=Math.round(img.height*s);
+    cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height);
+    state.theme.logo=Object.assign({},state.theme.logo,{src:cv.toDataURL('image/png')});applyTheme();persist();
+  }catch(e){alert('Logo could not be saved: '+e.message);}
 }
 async function editColor(key,heading,fallback){
   const r=await openDialog({heading,groups:[{key:'c',label:heading,colorOnly:true,fallback,values:{color:state.theme[key]}}]});
@@ -144,7 +176,7 @@ async function initTableau(){
   try{
     await tableau.extensions.initializeAsync();
     state.images=JSON.parse(tableau.extensions.settings.get('hub.images')||'{}');
-    try{const t=JSON.parse(tableau.extensions.settings.get('hub.theme')||'{}');state.theme=Object.assign({},DEFAULT_THEME,t,{title:Object.assign({},DEFAULT_THEME.title,t.title||{})});}catch(e){}
+    try{const t=JSON.parse(tableau.extensions.settings.get('hub.theme')||'{}');state.theme=Object.assign({},DEFAULT_THEME,t);['title','desc','logo','header'].forEach(k=>{state.theme[k]=Object.assign({},DEFAULT_THEME[k],t[k]||{});});}catch(e){}
     try{state.cardStyles=JSON.parse(tableau.extensions.settings.get('hub.cards')||'{}');}catch(e){}
     applyTheme();
     state.worksheetName=tableau.extensions.settings.get('hub.worksheet')||'';
@@ -177,6 +209,13 @@ async function compressImage(file){
 async function removeImage(link){delete state.images[link];try{await saveImages();render();}catch(e){alert('Could not save image settings: '+e.message);}}
 $('configureBtn').addEventListener('click',showConfig);
 $('editTitleBtn').addEventListener('click',editTitle);
+$('editDescBtn').addEventListener('click',editDesc);
+$('headerLayoutBtn').addEventListener('click',editHeader);
+$('logoSizeBtn').addEventListener('click',editLogoSize);
+$('logoUploadBtn').addEventListener('click',()=>{if(isAuthoring){$('logoPicker').value='';$('logoPicker').click();}});
+$('logoEmpty').addEventListener('click',()=>$('logoUploadBtn').click());
+$('logoPicker').addEventListener('change',e=>logoFromFile(e.target.files&&e.target.files[0]));
+$('logoRemoveBtn').addEventListener('click',()=>{state.theme.logo=Object.assign({},state.theme.logo,{src:''});applyTheme();persist();});
 $('headerColorBtn').addEventListener('click',()=>editColor('headerBg','Header color','#ffffff'));
 $('bgColorBtn').addEventListener('click',()=>editColor('pageBg','Page background color','#f5f7fa'));
 $('closeConfig').addEventListener('click',()=>$('configPanel').hidden=true);
