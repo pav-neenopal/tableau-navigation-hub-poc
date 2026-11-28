@@ -9,7 +9,7 @@
   <script src="tableau.extensions.1.latest.js"></script>
 </head>
 <body>
-  <header class="app-header" id="headerBox" data-label="Header">
+  <header class="app-header hdr-master" id="headerBox" data-label="Header">
     <div class="hdr-main">
       <div id="logoBox" class="hdr-box logo-box" data-label="Logo" hidden>
         <img id="logoImg" alt="Logo" hidden />
@@ -41,12 +41,11 @@
   </section>
 
   <nav id="sectorTabs" class="sector-tabs" aria-label="Dashboard sectors"></nav>
-  <div class="status-filter" role="group" aria-label="Filter by status">
-    <button class="filter-chip active" data-status="All">All statuses</button>
-    <button class="filter-chip" data-status="Live">Live</button>
-    <button class="filter-chip" data-status="Development">Development</button>
-    <button class="filter-chip" data-status="Review">Review</button>
-  </div>
+  <section id="summaryBox" class="summary-box hdr-master" data-label="Summary" hidden>
+    <div id="summaryTiles" class="summary-tiles"></div>
+    <span class="hdr-tools author-only"><button id="summaryLayoutBtn" title="Summary layout">✎</button></span>
+  </section>
+  <div id="statusFilter" class="status-filter" role="group" aria-label="Filter by status"></div>
   <main id="dashboardContent"><div class="loading">Connect a Tableau worksheet to load dashboard records.</div></main>
   <footer><span>Navigation Hub POC</span><span id="dataState">Waiting for Tableau…</span></footer>
   <input id="imagePicker" type="file" accept="image/png,image/jpeg,image/webp" hidden />

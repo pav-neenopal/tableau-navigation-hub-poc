@@ -4,7 +4,7 @@ const $ = (id) => document.getElementById(id);
 const state = { rows: [], sectors: [], activeSector: '', status: 'All', worksheetName: '', images: {}, pendingImageLink: '' };
 let isAuthoring=false;
 document.body.classList.add('viewer');
-const DEFAULT_THEME={title:{text:'Navigation Hub',color:'',font:'',size:26,w:null,h:null},desc:{text:'',color:'',font:'',size:14,w:null,h:null},logo:{src:'',w:null,h:56},header:{radius:10,height:null,padding:16,outer:0},tabs:{},headings:{},headerBg:'',pageBg:''};
+const DEFAULT_THEME={title:{text:'Navigation Hub',color:'',font:'',size:26,w:null,h:null},desc:{text:'',color:'',font:'',size:14,w:null,h:null},logo:{src:'',w:null,h:56},header:{radius:10,height:null,padding:16,outer:0},summary:{radius:10,height:null,padding:12,outer:0,bg:''},tile:{w:null,h:null,bg:''},tileTitle:{},tileNum:{},tabs:{},headings:{},headerBg:'',pageBg:''};
 state.cardStyles={};
 function styleStr(s){s=s||{};const p=[];if(s.color)p.push('color:'+s.color);if(s.font)p.push('font-family:'+s.font);if(s.size)p.push('font-size:'+s.size+'px');return escapeHtml(p.join(';'));}
 state.theme=JSON.parse(JSON.stringify(DEFAULT_THEME));
@@ -22,6 +22,8 @@ function applyTheme(){
   if(has)$('logoImg').src=t.logo.src;$('logoImg').hidden=!has;$('logoEmpty').hidden=has;$('logoRemoveBtn').hidden=!has;
   lb.hidden=!has&&!isAuthoring;lb.style.height=px(t.logo.h||56);lb.style.width=px(t.logo.w);
   const hb=$('headerBox');hb.style.borderRadius=px(t.header.radius);hb.style.height=px(t.header.height);hb.style.padding=px(t.header.padding);hb.style.margin=px(t.header.outer);
+  const sb=$('summaryBox'),s=t.summary;sb.style.borderRadius=px(s.radius);sb.style.height=px(s.height);sb.style.padding=px(s.padding);sb.style.margin=px(s.outer)+' '+px(s.outer)+' '+(s.outer?px(s.outer):'15px');
+  s.bg?r.setProperty('--summary-bg',s.bg):r.removeProperty('--summary-bg');
   t.headerBg?r.setProperty('--header-bg',t.headerBg):r.removeProperty('--header-bg');
   t.pageBg?r.setProperty('--page-bg',t.pageBg):r.removeProperty('--page-bg');
 }
@@ -57,6 +59,14 @@ async function editLogoSize(){
 async function editHeader(){
   const r=await openDialog({heading:'Header layout',groups:[{key:'header',label:'Header container',numsOnly:true,nums:[{key:'radius',label:'Corner rounding (px)'},{key:'height',label:'Height (px)'},{key:'padding',label:'Inner padding (px)'},{key:'outer',label:'Outer padding (px)'}],values:state.theme.header}]});
   if(r){state.theme.header=Object.assign({},state.theme.header,r.header);applyTheme();persist();}
+}
+async function editSummary(){
+  const r=await openDialog({heading:'Summary layout',groups:[{key:'summary',label:'Summary container',numsOnly:true,nums:[{key:'radius',label:'Corner rounding (px)'},{key:'height',label:'Height (px)'},{key:'padding',label:'Inner padding (px)'},{key:'outer',label:'Outer padding (px)'}],values:state.theme.summary},{key:'sbg',label:'Background',colorOnly:true,fallback:'#ffffff',values:{color:state.theme.summary.bg}}]});
+  if(r){state.theme.summary=Object.assign({},state.theme.summary,r.summary,{bg:r.sbg.color});applyTheme();persist();}
+}
+async function editTile(){
+  const r=await openDialog({heading:'Tile size',groups:[{key:'tile',label:'All tiles',numsOnly:true,nums:WH,values:state.theme.tile},{key:'tbg',label:'Tile background',colorOnly:true,fallback:'#ffffff',values:{color:state.theme.tile.bg}}]});
+  if(r){state.theme.tile=Object.assign({},state.theme.tile,r.tile,{bg:r.tbg.color});render();persist();}
 }
 async function logoFromFile(file){
   if(!isAuthoring||!file)return;
@@ -98,7 +108,7 @@ function tableRows(table){
   const idx = Object.fromEntries(FIELDS.map(f => [f, fieldIndex(cols,f)]));
   const missing = FIELDS.filter(f => idx[f] < 0);
   if(missing.length) throw new Error('Worksheet is missing required fields: ' + missing.join(', '));
-  return (table.data || []).map(row => {
+  const out = (table.data || []).map(row => {
     const vals = row.map(cell => cell && typeof cell === 'object' && 'value' in cell ? cell.value : cell);
     const obj = {};
     FIELDS.forEach(f => obj[f] = norm(vals[idx[f]]));
@@ -107,18 +117,31 @@ function tableRows(table){
     obj.Status = normalizeStatus(obj.Status);
     return obj;
   }).filter(r => r['Dashboard Name'] && r['Dashboard Link']);
+  const canon = {};
+  out.forEach(r => { const k = r.Status.toLowerCase(); r.Status = canon[k] || (canon[k] = r.Status); });
+  return out;
 }
-function normalizeStatus(s){
-  const v = norm(s).toLowerCase();
-  if(['live','published','production'].includes(v)) return 'Live';
-  if(['development','dev','in development'].includes(v)) return 'Development';
-  if(['review','in review','qc'].includes(v)) return 'Review';
-  return 'Review';
+function normalizeStatus(s){ return norm(s)||'No status'; }
+const KNOWN_STATUS={live:['#e6f4ea','#287443'],development:['#fff2d9','#916000'],review:['#e8edff','#4058a8']};
+const STATUS_PALETTE=[['#fde8e8','#a12d2d'],['#e0f5f5','#17696b'],['#f1e8fd','#6b3fa0'],['#fdeaf3','#a1346b'],['#eef2dc','#5b6b1e'],['#e8eef5','#3d5069']];
+function statusInline(s){
+  const k=String(s).toLowerCase().replace(/[^a-z]/g,'');
+  let c=KNOWN_STATUS[k]||(k==='inreview'||k==='qc'?KNOWN_STATUS.review:null)||(k==='dev'||k==='indevelopment'?KNOWN_STATUS.development:null)||(k==='published'||k==='production'?KNOWN_STATUS.live:null);
+  if(!c){let h=0;for(const ch of k)h=(h*31+ch.charCodeAt(0))>>>0;c=STATUS_PALETTE[h%STATUS_PALETTE.length];}
+  return escapeHtml('background:'+c[0]+';color:'+c[1]);
 }
 function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 function statusClass(s){return s.toLowerCase().replace(/[^a-z]/g,'');}
 function groupBy(arr,key){return arr.reduce((a,r)=>((a[r[key]] ||= []).push(r),a),{});}
 function imageFor(row){return state.images[row['Dashboard Link']] || '';}
+function renderSummary(rows){
+  const t=state.theme,box=$('summaryBox');
+  box.hidden=!state.rows.length;
+  const statuses=[...new Set(rows.map(r=>r.Status))];
+  const items=[['Total',rows.length],...statuses.map(s=>[s,rows.filter(r=>r.Status===s).length])];
+  const w=t.tile.w,ts=[w?'flex:0 0 '+w+'px':'',t.tile.h?'height:'+t.tile.h+'px':'',t.tile.bg?'background:'+t.tile.bg:''].filter(Boolean).join(';');
+  $('summaryTiles').innerHTML=items.map(([lab,n])=>`<div class="sum-tile hdr-box" data-label="Tile" style="${escapeHtml(ts)}"><div class="sum-title hdr-box" data-label="Tile title" style="${styleStr(t.tileTitle)}"><span>${escapeHtml(lab)}</span><span class="hdr-tools author-only"><button data-sum="tileTitle" title="Edit title text">✎</button></span></div><div class="sum-num hdr-box" data-label="Tile number" style="${styleStr(t.tileNum)}"><span>${n} ${n===1?'dashboard':'dashboards'}</span><span class="hdr-tools author-only"><button data-sum="tileNum" title="Edit number text">✎</button></span></div><span class="hdr-tools author-only"><button data-sum="size" title="Tile size and background">✎</button></span></div>`).join('');
+}
 function render(){
   const sectors = [...new Set(state.rows.map(r=>r['Dashboard Tab Name']).filter(Boolean))];
   state.sectors = sectors;
@@ -126,7 +149,13 @@ function render(){
   $('sectorTabs').innerHTML = sectors.map(s=>`<button class="sector-tab ${s===state.activeSector?'active':''}" data-sector="${escapeHtml(s)}" style="${styleStr(state.theme.tabs)}">${escapeHtml(s)}</button>`).join('')+'<button class="edit-btn author-only" data-edit-tabs title="Edit tab text">✎</button>';
   $('sectorTabs').querySelectorAll('[data-sector]').forEach(b=>b.addEventListener('click',()=>{state.activeSector=b.dataset.sector;render();}));
   const et=$('sectorTabs').querySelector('[data-edit-tabs]');if(et)et.addEventListener('click',()=>editTextStyle('tabs','Tab text'));
-  let rows=state.rows.filter(r=>r['Dashboard Tab Name']===state.activeSector);
+  const secRows=state.rows.filter(r=>r['Dashboard Tab Name']===state.activeSector);
+  const statuses=[...new Set(secRows.map(r=>r.Status))];
+  if(state.status!=='All'&&!statuses.includes(state.status)) state.status='All';
+  $('statusFilter').innerHTML=['All',...statuses].map(s=>`<button class="filter-chip ${s===state.status?'active':''}" data-status="${escapeHtml(s)}">${s==='All'?'All statuses':escapeHtml(s)}</button>`).join('');
+  $('statusFilter').querySelectorAll('.filter-chip').forEach(b=>b.addEventListener('click',()=>{state.status=b.dataset.status;render();}));
+  renderSummary(secRows);
+  let rows=secRows;
   if(state.status!=='All') rows=rows.filter(r=>r.Status===state.status);
   const cats=groupBy(rows,'Dashboard Category');
   if(!rows.length){$('dashboardContent').innerHTML='<div class="empty-state">No dashboards match this selection.</div>';return;}
@@ -139,7 +168,7 @@ function render(){
 function cardHtml(r){
   const cs=state.cardStyles[r['Dashboard Link']]||{};const link=safeLink(r['Dashboard Link']); const img=imageFor(r); const title=r['Dashboard Name'];
   const status=r.Status;
-  return `<article class="dashboard-card" style="${cs.bg?'background:'+escapeHtml(cs.bg):''}"><a class="preview" href="${escapeHtml(link)}" target="_blank" rel="noopener noreferrer" aria-label="Open ${escapeHtml(title)}">${img?`<img src="${img}" alt="${escapeHtml(title)} preview" />`:`<span class="image-empty">${isAuthoring?'<span class="plus">＋</span><span>Add dashboard image</span>':'<span>No preview</span>'}</span>`}</a><div class="card-body"><div class="card-title" style="${styleStr(cs.name)}">${escapeHtml(title)}</div><div class="card-bottom"><span class="status ${statusClass(status)}" style="${styleStr(cs.status)}">${escapeHtml(status)}</span><a class="open-link" href="${escapeHtml(link)}" target="_blank" rel="noopener noreferrer">Open dashboard ↗</a></div></div>${isAuthoring?`<div class="card-actions"><button data-format="${escapeHtml(link)}">Format</button><button data-image="${escapeHtml(link)}">${img?'Replace image':'Add image'}</button>${img?`<button data-remove-image="${escapeHtml(link)}">Remove</button>`:''}</div>`:''}</article>`;
+  return `<article class="dashboard-card" style="${cs.bg?'background:'+escapeHtml(cs.bg):''}"><a class="preview" href="${escapeHtml(link)}" target="_blank" rel="noopener noreferrer" aria-label="Open ${escapeHtml(title)}">${img?`<img src="${img}" alt="${escapeHtml(title)} preview" />`:`<span class="image-empty">${isAuthoring?'<span class="plus">＋</span><span>Add dashboard image</span>':'<span>No preview</span>'}</span>`}</a><div class="card-body"><div class="card-title" style="${styleStr(cs.name)}">${escapeHtml(title)}</div><div class="card-bottom"><span class="status ${statusClass(status)}" style="${statusInline(status)};${styleStr(cs.status)}">${escapeHtml(status)}</span><a class="open-link" href="${escapeHtml(link)}" target="_blank" rel="noopener noreferrer">Open dashboard ↗</a></div></div>${isAuthoring?`<div class="card-actions"><button data-format="${escapeHtml(link)}">Format</button><button data-image="${escapeHtml(link)}">${img?'Replace image':'Add image'}</button>${img?`<button data-remove-image="${escapeHtml(link)}">Remove</button>`:''}</div>`:''}</article>`;
 }
 function showConfig(){ $('configPanel').hidden=false; if(window.tableau?.extensions?.dashboardContent) loadWorksheetList(); }
 function setMessage(s){$('configMessage').textContent=s;}
@@ -176,7 +205,7 @@ async function initTableau(){
   try{
     await tableau.extensions.initializeAsync();
     state.images=JSON.parse(tableau.extensions.settings.get('hub.images')||'{}');
-    try{const t=JSON.parse(tableau.extensions.settings.get('hub.theme')||'{}');state.theme=Object.assign({},DEFAULT_THEME,t);['title','desc','logo','header'].forEach(k=>{state.theme[k]=Object.assign({},DEFAULT_THEME[k],t[k]||{});});}catch(e){}
+    try{const t=JSON.parse(tableau.extensions.settings.get('hub.theme')||'{}');state.theme=Object.assign({},DEFAULT_THEME,t);['title','desc','logo','header','summary','tile'].forEach(k=>{state.theme[k]=Object.assign({},DEFAULT_THEME[k],t[k]||{});});}catch(e){}
     try{state.cardStyles=JSON.parse(tableau.extensions.settings.get('hub.cards')||'{}');}catch(e){}
     applyTheme();
     state.worksheetName=tableau.extensions.settings.get('hub.worksheet')||'';
@@ -225,7 +254,9 @@ $('saveWorksheetBtn').addEventListener('click',async()=>{
   catch(e){setMessage(e.message);console.error(e);}
 });
 $('refreshBtn').addEventListener('click',async()=>{try{await loadWorksheetList();if(state.worksheetName)await loadWorksheetData(state.worksheetName);else showConfig();}catch(e){$('dataState').textContent=e.message;}});
-document.querySelectorAll('.filter-chip').forEach(b=>b.addEventListener('click',()=>{state.status=b.dataset.status;document.querySelectorAll('.filter-chip').forEach(x=>x.classList.toggle('active',x===b));render();}));
+$('summaryBox').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;
+  if(b.id==='summaryLayoutBtn')return editSummary();
+  const k=b.dataset.sum;if(k==='size')editTile();else if(k==='tileTitle')editTextStyle('tileTitle','Tile title text');else if(k==='tileNum')editTextStyle('tileNum','Tile number text');});
 $('imagePicker').addEventListener('change',async e=>{const file=e.target.files?.[0];if(!file||!state.pendingImageLink)return;if(file.size>12*1024*1024){alert('Choose an image smaller than 12 MB.');return;}try{state.images[state.pendingImageLink]=await compressImage(file);await saveImages();render();}catch(err){alert('Image could not be saved. Try a smaller JPG or PNG. '+err.message);}});
 initTableau();
 
